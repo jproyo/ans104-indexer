@@ -1,3 +1,5 @@
+![main workflow](https://github.com/jproyo/ans104-indexer/actions/workflows/rust.yml/badge.svg)
+
 # ANS-104 Indexer
 
 This project is an ANS-104 indexer that allows you to index transactions from the ANS-104 bundle using the Arweave network. It provides a command-line interface (CLI) for users to specify transaction IDs and storage options.
