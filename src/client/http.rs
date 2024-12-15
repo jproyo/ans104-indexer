@@ -1,5 +1,5 @@
 use crate::errors::ClientError;
-use crate::transaction::bundle::BundleItem;
+use crate::transaction::bundle::{BundleItem, BundleStream};
 use base64::{decode_config, URL_SAFE_NO_PAD};
 use bytes::BytesMut;
 use reqwest::{Client, Url};
@@ -19,7 +19,7 @@ impl HttpDownloader {
 
 #[async_trait::async_trait]
 impl Downloader for HttpDownloader {
-    async fn download(&self, transaction_id: String) -> Result<Vec<BundleItem>, ClientError> {
+    async fn download(&self, transaction_id: String) -> Result<BundleStream, ClientError> {
         let client = Client::new();
         let url = self
             .url
@@ -29,9 +29,9 @@ impl Downloader for HttpDownloader {
         let response = client.get(url).send().await?;
         let output = response.bytes().await?;
         let output = decode_config(output, URL_SAFE_NO_PAD)?;
-        let mut data = BytesMut::from(output.as_slice());
+        let data = BytesMut::from(output.as_slice());
 
-        let bundles = BundleItem::deserialize(&mut data)?;
+        let bundles = BundleItem::stream(data)?;
         Ok(bundles)
     }
 }

@@ -6,6 +6,8 @@ use bytes::{Buf, BytesMut};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::task::Poll;
+use tokio_stream::Stream;
 
 type Result<T> = std::result::Result<T, ParseError>;
 
@@ -101,9 +103,7 @@ impl BundleItem {
         })
     }
 
-    pub fn deserialize(data: &mut BytesMut) -> Result<Vec<BundleItem>> {
-        let mut items = Vec::new();
-
+    pub fn stream(mut data: BytesMut) -> Result<BundleStream> {
         let num_entries = data.get_u32_le();
         data.advance(28);
         let mut entries = vec![];
@@ -114,13 +114,11 @@ impl BundleItem {
             entries.push((size_entry, id));
         }
 
-        for (size, id) in entries {
-            let item_data = data.split_to(size as usize);
-            let item = Self::parse_item(item_data, id)?;
-            items.push(item);
-        }
-
-        Ok(items)
+        Ok(BundleStream {
+            bytes: data,
+            entries,
+            current_entry: 0,
+        })
     }
 
     fn read_optional_string(data: &mut BytesMut) -> Result<Option<String>> {
@@ -129,5 +127,30 @@ impl BundleItem {
             1 => Ok(Some(encode_config(data.split_to(32), URL_SAFE_NO_PAD))),
             _ => Err(ParseError::InvalidPresenceByte(data.get_u8())),
         }
+    }
+}
+
+pub struct BundleStream {
+    bytes: BytesMut,
+    entries: Vec<(u32, String)>,
+    current_entry: usize,
+}
+
+impl Stream for BundleStream {
+    type Item = Result<BundleItem>;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        let this = self.as_mut().get_mut();
+        if this.current_entry < this.entries.len() {
+            let (size, ref id) = this.entries[this.current_entry];
+            let item_data = this.bytes.split_to(size as usize);
+            let bundle = BundleItem::parse_item(item_data, id.to_string());
+            this.current_entry += 1;
+            return Poll::Ready(Some(bundle));
+        }
+        std::task::Poll::Ready(None)
     }
 }

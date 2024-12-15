@@ -45,4 +45,6 @@ pub enum IndexerError {
     Downloader(#[from] ClientError),
     #[error("Storage Error - {0}")]
     Storage(#[from] StorageError),
+    #[error("Parser Error - {0}")]
+    Parser(#[from] ParseError),
 }

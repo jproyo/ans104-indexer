@@ -1,10 +1,10 @@
-use std::path::PathBuf;
-
 use crate::client::http::HttpDownloader;
 use crate::client::Downloader;
 use crate::errors::IndexerError;
 use crate::storage::fs::LocalStorageFS;
 use crate::storage::Storage;
+use std::path::PathBuf;
+use tokio_stream::StreamExt;
 
 pub struct Indexer<D> {
     downloader: D,
@@ -28,14 +28,20 @@ where
     pub async fn index(&self, transaction_id: String) -> Result<(), IndexerError> {
         let mut storage =
             LocalStorageFS::new(transaction_id.clone(), self.storage_folder.clone()).await?;
-        let items = self.downloader.download(transaction_id).await?;
-        for i in items {
-            match storage.store(i).await {
+        let mut items = self.downloader.download(transaction_id).await?;
+        while let Some(item) = items.next().await {
+            match item {
+                Ok(value) => match storage.store(value).await {
+                    Err(e) => {
+                        storage.rollback().await;
+                        return Err(IndexerError::Storage(e));
+                    }
+                    Ok(_) => continue,
+                },
                 Err(e) => {
                     storage.rollback().await;
-                    return Err(IndexerError::Storage(e));
+                    return Err(IndexerError::Parser(e));
                 }
-                Ok(_) => continue,
             }
         }
         storage.commit().await?;
