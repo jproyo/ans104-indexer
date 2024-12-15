@@ -54,7 +54,7 @@ lazy_static! {
     ]);
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct BundleItem {
     id: String,
     signature: String,
@@ -152,5 +152,45 @@ impl Stream for BundleStream {
             return Poll::Ready(Some(bundle));
         }
         std::task::Poll::Ready(None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::vec;
+
+    use super::*;
+    use bytes::BytesMut;
+    use tokio::io::AsyncBufReadExt;
+    use tokio_stream::StreamExt;
+
+    #[tokio::test]
+    async fn test_stream() {
+        let data = tokio::fs::read("tests/fixtures/NbhWDsl290UWZ7GfMIM2xdrgCORceNgzmHf4l2uDypc")
+            .await
+            .unwrap();
+        let result = BundleItem::stream(BytesMut::from(data.as_slice()));
+
+        let mut read_lines = tokio::io::BufReader::new(
+            tokio::fs::File::open(
+                "tests/fixtures/NbhWDsl290UWZ7GfMIM2xdrgCORceNgzmHf4l2uDypc.expected",
+            )
+            .await
+            .unwrap(),
+        )
+        .lines();
+
+        let mut expected: Vec<BundleItem> = vec![];
+        while let Some(line) = read_lines.next_line().await.unwrap() {
+            expected.push(serde_json::from_str(line.as_str()).unwrap());
+        }
+
+        assert!(result.is_ok());
+        let mut stream = result.unwrap();
+        let mut parsed = vec![];
+        while let Some(Ok(i)) = stream.next().await {
+            parsed.push(i);
+        }
+        assert_eq!(parsed, expected);
     }
 }

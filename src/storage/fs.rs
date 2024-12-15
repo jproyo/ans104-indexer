@@ -38,8 +38,9 @@ impl LocalStorageFS<tokio::fs::File> {
 #[async_trait::async_trait]
 impl<W: AsyncWrite + Send + Unpin> Storage for LocalStorageFS<W> {
     async fn store(&mut self, bundle_item: BundleItem) -> Result<(), StorageError> {
-        let bytes = serde_json::to_vec(&bundle_item)
+        let mut bytes = serde_json::to_vec(&bundle_item)
             .map_err(|e| StorageError::CannotSerializeItem(e.to_string()))?;
+        bytes.push(b'\n');
         self.fs.write_all(&bytes).await?;
         self.fs.flush().await?;
         Ok(())
