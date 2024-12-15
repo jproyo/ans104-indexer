@@ -4,7 +4,7 @@ use std::vec::Vec;
 
 type Result<T> = std::result::Result<T, ParseError>;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct Tag {
     name: String,
     value: String,
@@ -80,5 +80,61 @@ impl<'a> TagsReader<'a> {
 
         let str = String::from_utf8(self.buffer[start_pos..self.pos].to_vec())?;
         Ok(str)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::errors::ParseError;
+
+    #[test]
+    fn test_deserialize_tags() {
+        let buffer = b"\x05\x00\x04\x00\x06\x00\x07\x00\x08\x00";
+        let expected_tags = vec![
+            Tag {
+                name: "name1".to_string(),
+                value: "value1".to_string(),
+            },
+            Tag {
+                name: "name2".to_string(),
+                value: "value2".to_string(),
+            },
+            Tag {
+                name: "name3".to_string(),
+                value: "value3".to_string(),
+            },
+            Tag {
+                name: "name4".to_string(),
+                value: "value4".to_string(),
+            },
+            Tag {
+                name: "name5".to_string(),
+                value: "value5".to_string(),
+            },
+        ];
+
+        let result = TagsReader::deserialize(buffer);
+        assert!(result.is_ok());
+        let tags = result.unwrap();
+        assert_eq!(tags, expected_tags);
+    }
+
+    #[test]
+    fn test_deserialize_tags_invalid_length() {
+        let buffer = b"\x02\x00\x03\x00\x04\x00\x05\x00\x06\x00\x07\x00";
+        let result = TagsReader::deserialize(buffer);
+        assert!(result.is_err());
+        let error = result.err().unwrap();
+        assert_eq!(error, ParseError::InvalidLengthString);
+    }
+
+    #[test]
+    fn test_deserialize_tags_expected_long() {
+        let buffer = b"\x02\x00\x03\x00\x04\x00\x05\x00\x06";
+        let result = TagsReader::deserialize(buffer);
+        assert!(result.is_err());
+        let error = result.err().unwrap();
+        assert_eq!(error, ParseError::ExpectedLong);
     }
 }
