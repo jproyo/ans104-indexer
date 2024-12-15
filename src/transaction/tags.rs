@@ -69,7 +69,7 @@ impl<'a> TagsReader<'a> {
     }
 
     fn read_string(&mut self) -> Result<String> {
-        let length = self.read_long().ok_or_else(|| ParseError::ExpectedLong)?;
+        let length = self.read_long().ok_or(ParseError::ExpectedLong)?;
 
         if length < 0 || (self.pos + length as usize) > self.buffer.len() {
             return Err(ParseError::InvalidLengthString);
