@@ -14,9 +14,12 @@ pub struct LocalStorageFS<W: AsyncWrite> {
 }
 
 impl LocalStorageFS<tokio::fs::File> {
-    pub async fn new(transaction_id: String, storage_folder: String) -> Result<Self, StorageError> {
+    pub async fn new(
+        transaction_id: String,
+        storage_folder: PathBuf,
+    ) -> Result<Self, StorageError> {
         let current_file = temp_dir().join(transaction_id.clone());
-        let storage = storage_folder.clone().into();
+        let storage = storage_folder.clone();
         tokio::fs::create_dir_all(storage_folder).await?;
         let fs = tokio::fs::File::options()
             .append(true)

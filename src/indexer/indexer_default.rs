@@ -1,55 +1,44 @@
+use std::path::PathBuf;
+
 use crate::client::http::HttpDownloader;
 use crate::client::Downloader;
 use crate::errors::IndexerError;
 use crate::storage::fs::LocalStorageFS;
 use crate::storage::Storage;
 
-pub struct Indexer<D, S> {
+pub struct Indexer<D> {
     downloader: D,
-    storage: S,
+    storage_folder: PathBuf,
 }
 
-impl Indexer<HttpDownloader, LocalStorageFS<tokio::fs::File>> {
-    pub async fn default(
-        url_download: &str,
-        transaction_id: &str,
-        storage_folder: &str,
-    ) -> Result<Self, IndexerError> {
-        let storage =
-            LocalStorageFS::new(transaction_id.to_string(), storage_folder.to_string()).await?;
+impl Indexer<HttpDownloader> {
+    pub async fn new(url_download: &str, storage_folder: &str) -> Result<Self, IndexerError> {
         let downloader = HttpDownloader::new(url_download.to_string())?;
         Ok(Self {
             downloader,
-            storage,
+            storage_folder: storage_folder.into(),
         })
     }
 }
 
-impl<D, S> Indexer<D, S>
+impl<D> Indexer<D>
 where
     D: Downloader,
-    S: Storage,
 {
-    pub async fn index(mut self, transaction_id: String) -> Result<(), IndexerError> {
+    pub async fn index(&self, transaction_id: String) -> Result<(), IndexerError> {
+        let mut storage =
+            LocalStorageFS::new(transaction_id.clone(), self.storage_folder.clone()).await?;
         let items = self.downloader.download(transaction_id).await?;
-        let mut r: Option<IndexerError> = None;
         for i in items {
-            match self.storage.store(i).await {
+            match storage.store(i).await {
                 Err(e) => {
-                    r = Some(IndexerError::Storage(e));
-                    break;
+                    storage.rollback().await;
+                    return Err(IndexerError::Storage(e));
                 }
                 Ok(_) => continue,
             }
         }
-        let final_ref = self.storage;
-        match r {
-            None => final_ref.commit().await?,
-            Some(e) => {
-                final_ref.rollback().await;
-                return Err(e);
-            }
-        }
+        storage.commit().await?;
         Ok(())
     }
 }

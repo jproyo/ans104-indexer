@@ -19,8 +19,7 @@ pub struct Cli {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let indexer =
-        Indexer::default(&cli.arwaeve_url, &cli.transaction_id, &cli.storage_folder).await?;
+    let indexer = Indexer::new(&cli.arwaeve_url, &cli.storage_folder).await?;
     indexer.index(cli.transaction_id).await?;
     Ok(())
 }
